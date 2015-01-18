@@ -2,6 +2,10 @@
 Thumbs.db
 ehthumbs.db
 
+#Pycharm stuff:
+*.xml
+*.iml
+
 # Codebook files:
 *.cb
 
