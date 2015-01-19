@@ -44,7 +44,7 @@ def animate(image_sequence):
         im = plt.imshow(image_sequence[i],cmap = plt.get_cmap('gray'), vmin = 0, vmax = 255)
         ims.append([im])
 
-    ani=animation.ArtistAnimation(fig, ims, interval=50, blit=True,repeat_delay=1000)
+    ani=animation.ArtistAnimation(fig, ims, interval=30, blit=True,repeat_delay=1000)
 
     plt.show()
 
