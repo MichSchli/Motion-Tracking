@@ -9,6 +9,7 @@ from skimage.color import rgb2gray
 from skimage.viewer import ImageViewer
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
+import matplotlib
 '''
 Utility functions:
 '''
@@ -36,7 +37,7 @@ def load_images_at_path(path, limit=None):
 
 #TODO: Maybe avoid memory errors for limit > 400
 #Define a function to show a sequence of images as an animation
-def animate(image_sequence):
+def animate(image_sequence, save=False):
     fig = plt.figure()
 
     ims = []
@@ -44,7 +45,12 @@ def animate(image_sequence):
         im = plt.imshow(image_sequence[i],cmap = plt.get_cmap('gray'), vmin = 0, vmax = 255)
         ims.append([im])
 
-    ani=animation.ArtistAnimation(fig, ims, interval=30, blit=True,repeat_delay=1000)
+    ani=animation.ArtistAnimation(fig, ims, interval=50, blit=True,repeat_delay=1000)
+
+    if save:
+        Writer = animation.writers['ffmpeg']
+        writer = Writer(fps=15, metadata=dict(artist='Us!'), bitrate=1800)
+        ani.save('gaussian31fine.mp4', writer=writer)
 
     plt.show()
 
@@ -58,4 +64,4 @@ if __name__ == '__main__':
 
     print "Done loading"
 
-    animate(ims)
+    animate(ims, True)
