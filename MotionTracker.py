@@ -11,44 +11,17 @@ from skimage.feature import corner_harris, corner_peaks
 from skimage.color import gray2rgb
 from skimage.viewer import ImageViewer
 import itertools
+
 '''
 Feature functions:
 '''
-#Builds a list of stable feature candidates. These are basically Harris corners.
-def get_stable_feature_candidates(frame,patch_radius, eigenvalue_threshold, w_func=lambda x,y: 1):
-    #TODO: Use library implementation of harris corner detection instead of this
-    '''gradx = hsobel(frame)
-    grady = vsobel(frame)
 
-    xmax = len(frame)
-    ymax = len(frame[0])
-
-    features = []
-
-    w = np.array([[None]*(patch_radius*2+1)]*(patch_radius*2+1))
-
-    #Calculate the w:
-    for i in range(-patch_radius, patch_radius+1):
-        for j in range(-patch_radius, patch_radius+1):
-            w[i+patch_radius,j+patch_radius] = w_func(i,j)
-
-    Gxx = np.multiply(gradx, gradx)
-    Gxy = np.multiply(gradx, grady)
-    Gyy = np.multiply(grady, grady)
-
-    for x in xrange(xmax):
-        for y in xrange(ymax):
-            if patch_radius-1 < x < xmax-patch_radius and patch_radius-1 < y < ymax-patch_radius:
-                G = calculate_structure_tensor(Gxx, Gxy, Gyy, x,y, patch_radius,w)
-                eigenvalues = np.linalg.eig(G)[0]
-
-                if min(eigenvalues) > eigenvalue_threshold:
-                    features.append((x,y))
-    '''
+#Define a function to build a list of stable feature candidates:.
+def get_stable_feature_candidates(frame,patch_radius):
     features = corner_peaks(corner_harris(frame), patch_radius)
-    features = remove_overlap(features, patch_radius)
     return features
 
+#Define a function to delete overlapping patches:
 def remove_overlap(coords, patch_radius):
     l =[]
     for i,j in itertools.combinations(range(len(coords)), 2):
@@ -63,22 +36,23 @@ Mathematical functions:
 '''
 #Define a function to create structure tensors for a list of points:
 def calculate_structure_tensors(frame, feature_list, patch_radius, w_func=lambda x,y:1):
+    #Find gradients:
     gradx = hsobel(frame)
     grady = vsobel(frame)
 
-    w = np.array([[None]*(patch_radius*2+1)]*(patch_radius*2+1))
-
     #Calculate the w:
+    w = np.array([[None]*(patch_radius*2+1)]*(patch_radius*2+1))
     for i in range(-patch_radius, patch_radius+1):
         for j in range(-patch_radius, patch_radius+1):
             w[i+patch_radius,j+patch_radius] = w_func(i,j)
 
+    #Precompute values through numpy:
     Gxx = np.multiply(gradx, gradx)
     Gxy = np.multiply(gradx, grady)
     Gyy = np.multiply(grady, grady)
 
+    #Calculate the G matrix of every feature:
     G_list = np.array([None]*len(feature_list))
-
     for i,(x,y) in enumerate(feature_list):
         G_list[i] = calculate_structure_tensor(Gxx, Gxy, Gyy, x, y, patch_radius, w)
 
@@ -100,7 +74,7 @@ def calculate_structure_tensor(Gxx, Gxy, Gyy, x, y, patch_radius, w):
 
     return np.array([[G00,G01],[G01,G11]])
 
-
+#Define a function to calculate residue-scaled gradients:
 def calculate_residue_scaled_gradients(patches, old_frame, new_frame, patch_radius, w_func=lambda x,y:1):
     #Calculate some gradients:
     gradx = hsobel(new_frame)
@@ -126,6 +100,7 @@ def calculate_residue_scaled_gradients(patches, old_frame, new_frame, patch_radi
 
     return e_list
 
+#Define a function to calculate a single residue-scaled gradient:
 def calculate_residue_gradient(ex, ey, x, y, patch_radius, w):
     e1 = 0
     e2 = 0
@@ -145,19 +120,17 @@ Motion tracking functions:
 '''
 
 #Define a function to build a feature sequence matching a video sequence:
-def build_feature_sequence(video_sequence, patch_radius=2, eigenvalue_threshold=0.3, w_func=lambda x,y:1, update_rate = 10):
+def build_feature_sequence(video_sequence, patch_radius=2, eigenvalue_threshold=0.001, w_func=lambda x,y:1, update_rate = 10):
     #Define the list of locations:
     patch_locations = [None]*len(video_sequence)
 
     #Find some features to track:
-    patch_locations[0] = get_stable_feature_candidates(video_sequence[0],patch_radius,eigenvalue_threshold,w_func)
+    patch_locations[0] = get_stable_feature_candidates(video_sequence[0],patch_radius)
+    patch_locations[0] = remove_overlap(patch_locations[0], patch_radius)
     xmax = len(video_sequence[0])
     ymax = len(video_sequence[0][0])
 
     for i in range(1,len(video_sequence)):
-        if i%10 == 0:
-            print i
-
         #Calculate G and e:
         G = calculate_structure_tensors(video_sequence[i], patch_locations[i-1], patch_radius, w_func)
         e = calculate_residue_scaled_gradients(patch_locations[i-1],video_sequence[i-1], video_sequence[i], patch_radius, w_func)
@@ -184,7 +157,7 @@ def build_feature_sequence(video_sequence, patch_radius=2, eigenvalue_threshold=
 
         #Add in new patch locations:
         if i%update_rate == 0:
-            new_feats = get_stable_feature_candidates(video_sequence[i],patch_radius,eigenvalue_threshold,w_func)
+            new_feats = get_stable_feature_candidates(video_sequence[i],patch_radius)
             if patch_locations[i] == []:
                 patch_locations[i] = new_feats
             else:
@@ -198,6 +171,7 @@ def build_feature_sequence(video_sequence, patch_radius=2, eigenvalue_threshold=
 Illustration functions:
 '''
 
+#Define a function to paint a list of patches into a video sequence:
 def paint_patches(frame, patches, patch_radius, color):
     col_frame = gray2rgb(frame)
     for i in xrange(len(patches)):
@@ -210,19 +184,61 @@ def paint_patches(frame, patches, patch_radius, color):
 
     return col_frame
 
+'''
+Interface
+'''
+
+def track(image_sequence_path, image_limit=400, w_func='uniform', patch_radius=15, eigenvalue_threshold=0.001, update_rate = 20):
+
+    #Do some casting because python fails:
+    patch_radius = int(patch_radius)
+    image_limit = int(image_limit)
+    eigenvalue_threshold = float(eigenvalue_threshold)
+    update_rate = int(update_rate)
+
+    if w_func == 'gaussian':
+        w_func = lambda x,y: 1/(2.0*math.pi*(1.41**2))*math.exp(-((x-4-1)**2 + (y-4-1)**2)/(2.0*(1.41**2)))
+    elif w_func=='uniform':
+        w_func = lambda x,y: 1
+
+    #Read in the images:
+    images = VideoLoader.load_images_at_path(image_sequence_path, limit=image_limit)
+
+    #Scale to a 0-1 representation:
+    images = [np.multiply(i, 1/255.0) for i in images]
+
+    #Build a sequence of feature locations:
+    feat_seq = build_feature_sequence(images, patch_radius=patch_radius, eigenvalue_threshold=eigenvalue_threshold, w_func=w_func, update_rate = update_rate)
+
+    #Paint the features on top of the images and return the result:
+    painted = [paint_patches(images[x],feat_seq[x], patch_radius, [1,1,0]) for x in range(image_limit)]
+    return painted
 
 '''
 Testing playground:
 '''
+
 import math
 if __name__ == '__main__':
-    ims = VideoLoader.load_images_at_path("DudekSeq", limit=400)
-    ims = [np.multiply(i, 1/255.0) for i in ims]
+    fn1 = input("Write the name of the folder containing the image sequence:\n")
 
-    feat_seq = build_feature_sequence(ims,patch_radius=15, w_func=lambda x,y: 1/(2.0*math.pi*(1.41**2))*math.exp(-((x-4-1)**2 + (y-4-1)**2)/(2.0*(1.41**2))))
+    query = input("Specify any additional parameters, or write \"done\" to proceed. Default:\nimage_limit=400, w_func='uniform', patch_radius=15, eigenvalue_threshold=0.001, update_rate = 20\n")
 
-    #feat_seq = build_feature_sequence(ims,patch_radius=7, w_func=lambda x,y: 1)
+    if query == "done":
+        p=track(fn1)
+    else:
+        ql = query.strip().split(" ")
 
-    painted = [paint_patches(ims[x],feat_seq[x], 15, [1,1,0]) for x in range(400)]
+        ql2 = [s.split("=") for s in ql]
+        qld = {s[0]: s[1] for s in ql2}
 
-    VideoLoader.animate(painted, save=True)
+        p=track(fn1, **qld)
+
+    a = input("Do you wish to save the result? [Y/N]")
+
+    if a == 'Y':
+        save = True
+    else:
+        save = False
+
+    VideoLoader.animate(p, save=save)

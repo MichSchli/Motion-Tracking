@@ -10,6 +10,7 @@ from skimage.viewer import ImageViewer
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 import matplotlib
+
 '''
 Utility functions:
 '''
@@ -35,23 +36,26 @@ def load_images_at_path(path, limit=None):
     return items
 
 
-#TODO: Maybe avoid memory errors for limit > 400
 #Define a function to show a sequence of images as an animation
 def animate(image_sequence, save=False):
     fig = plt.figure()
 
+    #Plot all the images in the sequence:
     ims = []
     for i in xrange(len(image_sequence)):
         im = plt.imshow(image_sequence[i],cmap = plt.get_cmap('gray'), vmin = 0, vmax = 255)
         ims.append([im])
 
+    #Animate the sequence:
     ani=animation.ArtistAnimation(fig, ims, interval=50, blit=True,repeat_delay=1000)
 
+    #Save to a file if requested:
     if save:
         Writer = animation.writers['ffmpeg']
         writer = Writer(fps=15, metadata=dict(artist='Us!'), bitrate=1800)
-        ani.save('gaussian31fine.mp4', writer=writer)
+        ani.save('motion-track.mp4', writer=writer)
 
+    #Show the sequence:
     plt.show()
 
 '''
